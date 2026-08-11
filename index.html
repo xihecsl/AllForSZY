@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a0a">
+<title>宋祖英人生模拟器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    background: #060606;
+    font-family: "京华老宋体", "JingHua LaoSongTi", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+    color: #F5E6A8;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+  }
+  /* 全局背景：径向暗金光晕 + 细微噪点 */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse at 50% -10%, rgba(212,175,55,0.16), transparent 55%),
+      radial-gradient(ellipse at 50% 110%, rgba(212,175,55,0.10), transparent 55%),
+      radial-gradient(circle at 15% 40%, rgba(212,175,55,0.05), transparent 40%),
+      radial-gradient(circle at 85% 70%, rgba(212,175,55,0.05), transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background-image:
+      repeating-linear-gradient(45deg, rgba(212,175,55,0.012) 0 2px, transparent 2px 6px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* 浮动光点层 */
+  #stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  #stars span {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: rgba(245,230,168,0.7);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(245,230,168,0.8);
+    animation: float linear infinite;
+  }
+  @keyframes float {
+    0%   { transform: translateY(0) scale(1); opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { transform: translateY(-110vh) scale(1.3); opacity: 0; }
+  }
+
+  #app {
+    position: relative; z-index: 1;
+    height: 100vh; height: 100dvh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px 14px;
+  }
+  .stage {
+    width: 100%;
+    max-width: 480px;
+    max-height: 100%;
+    overflow-y: auto;
+    border: 1px solid rgba(212,175,55,0.45);
+    border-radius: 4px;
+    padding: 38px 22px 70px;
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(212,175,55,0.06), rgba(0,0,0,0) 30%),
+      linear-gradient(0deg, rgba(212,175,55,0.04), rgba(0,0,0,0) 30%),
+      rgba(10,8,5,0.55);
+    box-shadow:
+      0 0 30px rgba(212,175,55,0.10) inset,
+      0 0 24px rgba(0,0,0,0.6);
+    backdrop-filter: blur(2px);
+  }
+  /* 四角装饰 */
+  .stage::before, .stage::after {
+    content: "";
+    position: absolute;
+    width: 18px; height: 18px;
+    border: 1px solid rgba(232,200,122,0.7);
+    pointer-events: none;
+  }
+  .stage::before { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+  .stage::after  { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+  .corner-tr, .corner-bl {
+    position: absolute;
+    width: 18px; height: 18px;
+    border: 1px solid rgba(232,200,122,0.7);
+    pointer-events: none;
+  }
+  .corner-tr { top: 8px; right: 8px; border-left: none; border-bottom: none; }
+  .corner-bl { bottom: 8px; left: 8px; border-right: none; border-top: none; }
+
+  .stage::-webkit-scrollbar { width: 3px; }
+  .stage::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.35); border-radius: 2px; }
+  .stage::-webkit-scrollbar-track { background: transparent; }
+
+  /* 标题：花纹 + 渐变文字 */
+  .title {
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.32rem;
+    color: #E8C87A;
+    margin: 4px 0 10px;
+    letter-spacing: 4px;
+    text-shadow: 0 0 14px rgba(232,200,122,0.35);
+  }
+  .ornament {
+    text-align: center;
+    color: rgba(232,200,122,0.6);
+    font-size: 0.9rem;
+    letter-spacing: 8px;
+    margin: 6px 0 22px;
+    position: relative;
+  }
+  .ornament::before, .ornament::after {
+    content: "";
+    display: inline-block;
+    width: 38px; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(232,200,122,0.6));
+    vertical-align: middle;
+    margin: 0 10px;
+  }
+  .ornament::after { background: linear-gradient(90deg, rgba(232,200,122,0.6), transparent); }
+
+  .body { font-size: 1.02rem; line-height: 2.05; }
+  .body.left p { text-indent: 2em; margin-bottom: 6px; }
+  .body.center { text-align: center; }
+  .body.center p { margin-bottom: 14px; }
+  /* 引用台词段落 */
+  .body p.quote {
+    text-indent: 0;
+    color: #E8C87A;
+    font-style: italic;
+    border-left: 2px solid rgba(232,200,122,0.4);
+    padding-left: 12px;
+    margin: 6px 0 6px 8px;
+  }
+
+  .fade { animation: fade .7s ease both; }
+  @keyframes fade { from{opacity:0; transform: translateY(12px);} to{opacity:1; transform:none;} }
+
+  .choices { margin-top: 28px; display: flex; flex-direction: column; gap: 14px; }
+  .choice {
+    border: 1px solid rgba(212,175,55,0.45);
+    border-radius: 4px;
+    padding: 15px 16px 15px 30px;
+    color: #F5E6A8;
+    background: linear-gradient(90deg, rgba(212,175,55,0.08), rgba(212,175,55,0.02));
+    font-size: 0.98rem;
+    line-height: 1.7;
+    cursor: pointer;
+    transition: background .25s, transform .1s, box-shadow .25s, border-color .25s;
+    font-family: inherit;
+    text-align: left;
+    position: relative;
+  }
+  .choice::before {
+    content: "❖";
+    position: absolute;
+    left: 10px; top: 14px;
+    color: rgba(232,200,122,0.7);
+    font-size: 0.85rem;
+  }
+  .choice:active {
+    background: linear-gradient(90deg, rgba(212,175,55,0.20), rgba(212,175,55,0.06));
+    transform: scale(0.99);
+    box-shadow: 0 0 16px rgba(212,175,55,0.25);
+    border-color: rgba(232,200,122,0.8);
+  }
+
+  .hint {
+    position: absolute;
+    bottom: 16px; left: 0; right: 0;
+    text-align: center;
+    color: rgba(232,200,122,0.55);
+    font-size: 0.8rem;
+    letter-spacing: 3px;
+    animation: blink 2s infinite;
+    pointer-events: none;
+  }
+  .hint::before { content: "▸ "; opacity: 0.6; }
+  @keyframes blink { 0%,100%{opacity:0.3;} 50%{opacity:0.85;} }
+
+  .ending-label {
+    text-align: center;
+    color: rgba(232,200,122,0.75);
+    font-size: 0.82rem;
+    letter-spacing: 8px;
+    margin-bottom: 14px;
+  }
+  .ending-label::before, .ending-label::after {
+    content: "✦"; margin: 0 14px; opacity: 0.6; font-size: 0.7rem;
+  }
+  .ending-title {
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.6rem;
+    color: #E8C87A;
+    margin-bottom: 26px;
+    letter-spacing: 4px;
+    text-shadow: 0 0 20px rgba(232,200,122,0.4);
+    position: relative;
+    padding-bottom: 20px;
+  }
+  .ending-title::after {
+    content: "";
+    position: absolute;
+    left: 50%; bottom: 0;
+    transform: translateX(-50%);
+    width: 60%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(232,200,122,0.7), transparent);
+  }
+  .restart {
+    margin-top: 30px;
+    width: 100%;
+    border: 1px solid rgba(212,175,55,0.55);
+    background: linear-gradient(180deg, rgba(212,175,55,0.12), rgba(212,175,55,0.04));
+    color: #E8C87A;
+    padding: 14px;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+    cursor: pointer;
+    letter-spacing: 5px;
+    transition: box-shadow .25s, background .25s;
+  }
+  .restart:active { background: linear-gradient(180deg, rgba(212,175,55,0.22), rgba(212,175,55,0.08)); box-shadow: 0 0 18px rgba(212,175,55,0.3); }
+  .clickable { cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="stars"></div>
+<div id="app"><div class="stage" id="stage"><span class="corner-tr"></span><span class="corner-bl"></span></div></div>
+<script>
+// 浮动光点
+(function(){
+  const box = document.getElementById('stars');
+  for (let i = 0; i < 28; i++) {
+    const s = document.createElement('span');
+    s.style.left = Math.random() * 100 + '%';
+    s.style.bottom = '-10px';
+    s.style.animationDuration = (12 + Math.random() * 18) + 's';
+    s.style.animationDelay = (Math.random() * 20) + 's';
+    s.style.opacity = (0.3 + Math.random() * 0.5);
+    s.style.transform = 'scale(' + (0.6 + Math.random() * 1.2) + ')';
+    box.appendChild(s);
+  }
+})();
+
+const stage = document.getElementById('stage');
+const corners = '<span class="corner-tr"></span><span class="corner-bl"></span>';
+const clear = () => { stage.innerHTML = corners; };
+
+function ornament() {
+  const o = document.createElement('div');
+  o.className = 'ornament';
+  o.textContent = '❖';
+  return o;
+}
+
+function hint(text) {
+  const h = document.createElement('div');
+  h.className = 'hint';
+  h.textContent = text || '点击屏幕继续';
+  stage.appendChild(h);
+}
+
+function renderText(opt) {
+  clear();
+  const wrap = document.createElement('div');
+  wrap.className = 'fade';
+  if (opt.title) {
+    const t = document.createElement('div');
+    t.className = 'title';
+    t.textContent = opt.title;
+    wrap.appendChild(t);
+    wrap.appendChild(ornament());
+  }
+  const body = document.createElement('div');
+  body.className = 'body ' + (opt.align || 'left');
+  opt.paragraphs.forEach(p => {
+    const para = document.createElement('p');
+    para.textContent = p;
+    body.appendChild(para);
+  });
+  wrap.appendChild(body);
+  wrap.classList.add('clickable');
+  stage.appendChild(wrap);
+  hint(opt.hintText);
+  wrap.addEventListener('click', opt.onClick);
+}
+
+function renderChoices(opt) {
+  clear();
+  const wrap = document.createElement('div');
+  wrap.className = 'fade';
+  if (opt.title) {
+    const t = document.createElement('div');
+    t.className = 'title';
+    t.textContent = opt.title;
+    wrap.appendChild(t);
+    wrap.appendChild(ornament());
+  }
+  const body = document.createElement('div');
+  body.className = 'body left';
+  opt.paragraphs.forEach(p => {
+    const para = document.createElement('p');
+    para.textContent = p;
+    body.appendChild(para);
+  });
+  wrap.appendChild(body);
+
+  const c = document.createElement('div');
+  c.className = 'choices';
+  opt.choices.forEach(ch => {
+    const btn = document.createElement('button');
+    btn.className = 'choice';
+    btn.textContent = ch.text;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); ch.action(); });
+    c.appendChild(btn);
+  });
+  wrap.appendChild(c);
+  stage.appendChild(wrap);
+}
+
+function renderEnding(opt) {
+  clear();
+  const wrap = document.createElement('div');
+  wrap.className = 'fade';
+  const label = document.createElement('div');
+  label.className = 'ending-label';
+  label.textContent = '结 局';
+  wrap.appendChild(label);
+  const t = document.createElement('div');
+  t.className = 'ending-title';
+  t.textContent = opt.title;
+  wrap.appendChild(t);
+  wrap.appendChild(ornament());
+  const body = document.createElement('div');
+  body.className = 'body left';
+  opt.paragraphs.forEach(p => {
+    const para = document.createElement('p');
+    para.textContent = p;
+    body.appendChild(para);
+  });
+  wrap.appendChild(body);
+
+  const btn = document.createElement('button');
+  btn.className = 'restart';
+  btn.textContent = '重新开始';
+  btn.addEventListener('click', () => flow.preface());
+  wrap.appendChild(btn);
+  stage.appendChild(wrap);
+}
+
+const flow = {
+  preface() {
+    renderText({
+      title: '【前 言】',
+      align: 'center',
+      paragraphs: [
+        '这是一个已被命运写定的故事。',
+        '所有的节点都已被封存。',
+        '但真的没有如果吗？'
+      ],
+      onClick: () => flow.y1966()
+    });
+  },
+
+  y1966() {
+    if (Math.random() < 0.01) {
+      renderEnding({
+        title: '夭折',
+        paragraphs: ['你因新生儿窒息抢救无效，不幸夭折。']
+      });
+      return;
+    }
+    renderText({
+      title: '【1966年】',
+      align: 'left',
+      paragraphs: [
+        '你出生在湘西大山中，是父母的第一个孩子。因为你农历6月出生，家里人都叫你"六英子"。'
+      ],
+      onClick: () => flow.y1979()
+    });
+  },
+
+  y1979() {
+    if (Math.random() < 0.30) {
+      renderEnding({
+        title: '失学',
+        paragraphs: [
+          '父亲的离世让本就不算富裕的生活更加艰难，家中已拿不出钱让你继续读书。为了补贴家用，你决定辍学帮妈妈分担家务。',
+          '此后，即便对学习无限渴望，你还是再也没能走进校园，像无数大山里的女孩一样，结婚生子，度过了平淡的一生。'
+        ]
+      });
+      return;
+    }
+    renderText({
+      title: '【1979年】',
+      align: 'left',
+      paragraphs: [
+        '父亲的离世让本就不算富裕的生活更加艰难，家中已拿不出钱让你继续读书。这时远方来了一位外地人，他无意间得知了你的窘况，慷慨地拿出了钱供你读书，虽然只是几块钱，但足以支持你的学业。',
+        '命运又一次助你走过困境。'
+      ],
+      onClick: () => flow.y1981()
+    });
+  },
+
+  y1981() {
+    renderChoices({
+      title: '【1981年】',
+      paragraphs: ['古丈县歌舞团来寨子里招工，邻居大姐撺掇着你去报名，你犹豫了：'],
+      choices: [
+        {
+          text: 'A. 弟弟妹妹还小，妈妈的负担很重，我还是在家里照应着吧。',
+          action: () => renderEnding({
+            title: '明珠蒙尘',
+            paragraphs: ['你因错过了县歌舞团的招工，再也没能向外界展现你的歌唱天赋。']
+          })
+        },
+        {
+          text: 'B. 县歌舞团据说可以包吃住，去了或许可以减轻家里负担。',
+          action: () => flow.y1981b()
+        }
+      ]
+    });
+  },
+
+  y1981b() {
+    renderText({
+      title: '【1981年】',
+      align: 'left',
+      paragraphs: ['你最终选择了更高的平台，来到了几十公里外的古丈县城，这是你走出大山的第一步。'],
+      onClick: () => {
+        if (Math.random() < 0.02) {
+          renderEnding({
+            title: '明珠暗投',
+            paragraphs: ['县歌舞团最终淘汰了你，你只能带着遗憾度过余生。']
+          });
+        } else {
+          flow.y1984();
+        }
+      }
+    });
+  },
+
+  y1984() {
+    renderText({
+      title: '【1984年】',
+      align: 'left',
+      paragraphs: [
+        '过去的三年间你飞速成长，从古丈县走到了湘西州，甚至进京参加了全国性的文艺汇演，成为了州歌舞团新任"台柱子"。',
+        '这年，中央民族大学来湘西州招生，老师对你的天资很感兴趣，让你好好准备文化课考试。你大受鼓舞，废寝忘食地学习文化知识。'
+      ],
+      onClick: () => {
+        if (Math.random() < 0.30) {
+          renderEnding({
+            title: '考试落榜',
+            paragraphs: ['不知是实力不足还是时运不济，你最终没能通过文化课考试。湘西的大山重重叠叠，走出去终究是一件可望而不可及的事。']
+          });
+        } else {
+          renderText({
+            title: '【1984年】',
+            align: 'left',
+            paragraphs: ['你的努力没有白费，成功通过了文化课考试，前往中央民族大学音舞系，跟随罗秀英、周本庆两位老师学习。'],
+            onClick: () => flow.y1988a()
+          });
+        }
+      }
+    });
+  },
+
+  y1988a() {
+    renderText({
+      title: '【1988年】',
+      align: 'left',
+      paragraphs: [
+        '经过系统性的学习，你的能力和水平都有了大幅提升。这年你再次前往长沙参加"金龙杯"青年歌手大奖赛。',
+        '比赛现场高手云集，有从西北远道而来的男高音，有和你一样从山里走出来的民族女高，当然让你印象最深刻的，是那个圆圆脸蛋细细声音的长沙妹子，他们都叫她"野耶"，虽然你不知道怎么写，但确实是个有趣的名字，和那个姑娘一样有趣。',
+        '虽然看起来有些像小孩子，但她的实力却不容小觑。你听过一场她的比赛，得天独厚的先天条件实在难得，就连你也没有十足的把握能从她手里抢到头名。也是那场比赛，你才知道，她叫张也。'
+      ],
+      onClick: () => {
+        if (Math.random() < 0.50) {
+          renderEnding({
+            title: '失之交臂',
+            paragraphs: ['土路子哪比得上正规军，你最终还是没能拿到那座金闪闪的奖杯。即便拿到了优秀奖，但还是有些不甘心。但那又能如何呢。']
+          });
+        } else {
+          flow.y1988b();
+        }
+      }
+    });
+  },
+
+  y1988b() {
+    renderChoices({
+      title: '【1988年】',
+      paragraphs: [
+        '最终，你和那位姑娘并列第一，共享了冠军的喜悦。',
+        '赛后，一位名叫罗浩的编导联系你，问你愿不愿意跟随金铁霖老师继续学习。你仿佛又回到了赛场，炽热的镁光灯下，一切都像幻梦一般，只剩下实实在在的、紧张的心跳。你有些不信任他，但又怕错过这个千载难逢的机会：'
+      ],
+      choices: [
+        {
+          text: 'A. "当然愿意，但金老师肯收我么？"',
+          action: () => flow.y1989()
+        },
+        {
+          text: 'B. "要不我还是回湘西吧，或者在湖南，金老师不会收我的。"',
+          action: () => renderEnding({
+            title: '打道回府',
+            paragraphs: [
+              '北京像一个遥不可及的梦，总会有破灭的一天。',
+              '你拿着金奖回到了州歌舞团，拿到了一笔可观的奖金，足够和家里人好好庆祝一番。北京的梦随着湘江水越飘越远。'
+            ]
+          })
+        }
+      ]
+    });
+  },
+
+  y1989() {
+    renderText({
+      title: '【1989年】',
+      align: 'left',
+      paragraphs: [
+        '再一次来到北京，这次的心境却截然不同了。从各类晚会到电视剧龙套，你得到了更多锻炼的机会，未来似乎变得越来越清晰。'
+      ],
+      onClick: () => {
+        if (Math.random() < 0.60) {
+          renderEnding({
+            title: '怀才不遇',
+            paragraphs: [
+              '千里马常有而伯乐不常有，而你似乎就缺乏这样一位伯乐。',
+              '过了很多年，当提起你的名字时，或许只有少部分观众会记得，大部分都会报以迷茫的目光。天下英雄如过江之鲫，大部分人都将埋没在时间的大潮中，被世人所遗忘。'
+            ]
+          });
+        } else {
+          renderText({
+            title: '【1989年】',
+            align: 'left',
+            paragraphs: [
+              '一位导演联系了你，而这次不是其他的舞台，而是那一方所有歌者都心向往之的最高殿堂——春晚。',
+              '那位导演正是1990年央视春晚总导演：黄一鹤。'
+            ],
+            onClick: () => flow.y1991()
+          });
+        }
+      }
+    });
+  },
+
+  y1991() {
+    renderText({
+      title: '【1991年】',
+      align: 'left',
+      paragraphs: [
+        '各部队文工团来国音招生，很多人推荐你进入资源雄厚的总政，但家底相对比较薄弱的海政也向你抛出了橄榄枝。站在命运的分岔路口，你又一次面临选择。'
+      ],
+      onClick: () => {
+        if (Math.random() < 0.05) {
+          renderEnding({
+            title: '总政的日子',
+            paragraphs: [
+              '因为种种原因，你被分到了总政文工团。虽然这里无疑是资源最好、家底最厚的地方，你也可能真的可以"唱出来"，但终究不是海政。'
+            ]
+          });
+        } else {
+          renderText({
+            title: '【1991年】',
+            align: 'left',
+            paragraphs: [
+              '即便所有人似乎都觉得总政更适合青年演员发展前途，但你还是选择了海政。',
+              '从深山到海疆，从国内到海外，你逐渐成长为一名出色的歌唱演员、一位优秀的海军战士。大地无处不飞歌，你的歌声真的做到了家喻户晓，你的名字真正为大众所熟知。'
+            ],
+            onClick: () => flow.y2002()
+          });
+        }
+      }
+    });
+  },
+
+  y2002() {
+    renderText({
+      title: '【2002年】',
+      align: 'left',
+      paragraphs: [
+        '中澳建交三十周年，你肩负着文化传播的任务远渡重洋，来到了这块美丽而神秘的土地。',
+        '飞机飞过赤道，严寒的北风换成了炎热的夏日，水土不服肯定是有的，但坚韧的性格和专业的素养让你圆满完成了这次演出。',
+        '悉尼港的晚风裹挟着太平洋的水气拂过你的面颊，绚烂的烟花在漆黑的夜幕下尽情绽放。过去的十年，你收获了很多，成长了更多；未来的十年，你不知道自己会走向何方，但你相信，自己一定会走得更远更高，像这些烟花一样绽放出绚丽的光彩。'
+      ],
+      onClick: () => flow.y2003a()
+    });
+  },
+
+  y2003a() {
+    renderText({
+      title: '【2003年】',
+      align: 'left',
+      paragraphs: [
+        '突如其来的感冒，遥远的异国他乡，迫在眉睫的演出。',
+        '所有人的目光都聚焦在你身上，所有人都在担心你的身体，但没有一个人敢劝你放弃。',
+        '"死也要死在台上。"大幕拉开，好戏开场。'
+      ],
+      onClick: () => {
+        if (Math.random() < 0.05) {
+          renderEnding({
+            title: '抱憾',
+            paragraphs: [
+              '汗水浸透了演出服，共鸣也随着炎症乱得一团糟。',
+              '即便所有人都说这是身体原因、只是运气不好，但遗憾就在那里，无法忽视。这是一场有些耻辱的失败，你没能给观众带来一场完整的演出，职业道德让你感到羞愧。'
+            ]
+          });
+        } else {
+          renderText({
+            title: '【2003年】',
+            align: 'left',
+            paragraphs: [
+              '还好还好，意志带你杀出重围，圆满完成了这次演出。',
+              '谢幕时所有人都起立为你鼓掌，后台的同事朋友也松了口气，激动得无以复加。这是一次成功的尝试，中国民族声乐将要开启全新的篇章。'
+            ],
+            onClick: () => flow.y2003b()
+          });
+        }
+      }
+    });
+  },
+
+  y2003b() {
+    renderText({
+      title: '【2003年】',
+      align: 'left',
+      paragraphs: [
+        '"你确定没问题噢？""没问题。"',
+        '"真没问题？""没问题。"',
+        '"我真佩服你。"',
+        '从擦肩而过的路人到朝夕相伴的战友，再到现在的对手戏演员，吕继宏也算一路见证了你的成长。看着他担心的样子，你实在是有些无奈，拍拍他的肩膀："放心吧。"',
+        '音乐响起，一抹红色飞向舞台中央。',
+        '肖可悦来了。'
+      ],
+      onClick: () => flow.y2009()
+    });
+  },
+
+  y2009() {
+    renderText({
+      title: '【2009年】',
+      align: 'left',
+      paragraphs: [
+        '从悉尼到维也纳，从肯尼迪音乐厅到奥运会闭幕式，你的歌声某种程度上说已经变成了一种文化符号，与国家形象绑在了一起。',
+        '这次你又要"敢为天下先"，做出一次大胆的尝试——开演唱会。谁说演唱会只属于流行乐，你偏要"居庙堂之高"的民族声乐沾染一些"江湖气"，你要让所有人知道"民歌也流行"。'
+      ],
+      onClick: () => flow.y2012()
+    });
+  },
+
+  y2012() {
+    renderText({
+      title: '【2012年】',
+      align: 'left',
+      paragraphs: [
+        '山雨欲来，许多事情已经悄然发生改变。',
+        '但你还是完成了博士学业，成为了中国第一位民族声乐博士。国音的音乐厅不大，却坐满了你的师长、战友，甚至粉丝。这不是一场公开的演出，但却留在了所有观众的脑海里。'
+      ],
+      onClick: () => flow.y2013()
+    });
+  },
+
+  y2013() {
+    renderText({
+      title: '【2013—2018年】',
+      align: 'left',
+      paragraphs: [
+        '道别是一件难事，但这些年你似乎已经习惯了道别。',
+        '和春晚道别，和舞台道别，最后，和工作了近三十年的海政道别。之前以为退休遥不可及，朋友还调侃说期待你六十岁拿奥斯卡的那一天，现在看来不过是虚幻的泡影。',
+        '好在你早就明白，名利不过身外物。你还有家人，还有朋友，还有支持你的粉丝。这么看来，道别似乎也没有那么难了。'
+      ],
+      onClick: () => flow.end2026()
+    });
+  },
+
+  end2026() {
+    renderText({
+      title: '【END · 2026】',
+      align: 'center',
+      paragraphs: [
+        '六十年，弹指一挥间。',
+        '当年为生活发愁、被命运安排的六英子，也成为了如今的宋老师。',
+        '宋老师的人生没有如果，但正是这许许多多的如果，才让六英子成长为宋老师。',
+        '宋老师，感谢你做出了那些选择，也感谢命运让我们见到了这样的你。',
+        '生日快乐。'
+      ],
+      onClick: () => flow.afterword()
+    });
+  },
+
+  afterword() {
+    clear();
+    const wrap = document.createElement('div');
+    wrap.className = 'fade';
+    const t = document.createElement('div');
+    t.className = 'title';
+    t.textContent = '【写在后面】';
+    wrap.appendChild(t);
+    wrap.appendChild(ornament());
+    const body = document.createElement('div');
+    body.className = 'body left';
+    const p = document.createElement('p');
+    p.textContent = '写这些文字的时候，我才渐渐发现，随着时间推移，宋老师的if线变得越来越少，她活成了一种标杆，我想象不出其他可能，所以后面的故事就有点像"走马灯"，让大家一起回顾她的一生。';
+    body.appendChild(p);
+    wrap.appendChild(body);
+
+    const btn = document.createElement('button');
+    btn.className = 'restart';
+    btn.textContent = '重新开始';
+    btn.addEventListener('click', () => flow.preface());
+    wrap.appendChild(btn);
+    stage.appendChild(wrap);
+  }
+};
+
+flow.preface();
+</script>
+</body>
+</html>
